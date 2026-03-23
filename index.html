@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OGN Live Glider Map</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --sky:     #0a1628;
+      --panel:   #0d1f3c;
+      --border:  #1a3a6e;
+      --accent:  #00d4ff;
+      --climb:   #00ff88;
+      --sink:    #ff4d6d;
+      --neutral: #ffd700;
+      --text:    #c8e0ff;
+      --mono:    'Share Tech Mono', monospace;
+      --sans:    'Barlow', sans-serif;
+    }
+
+    html, body { height: 100%; background: var(--sky); color: var(--text); font-family: var(--sans); }
+
+    /* ── Header ── */
+    #header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+      display: flex; align-items: center; gap: 16px;
+      padding: 10px 18px;
+      background: linear-gradient(90deg, var(--sky) 0%, #0d2040 100%);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(8px);
+    }
+    #header h1 { font-family: var(--mono); font-size: 1rem; letter-spacing: 0.12em; color: var(--accent); text-transform: uppercase; white-space: nowrap; }
+    #header h1 span { color: #fff; }
+    #status { font-family: var(--mono); font-size: 0.78rem; color: var(--text); opacity: 0.7; margin-left: auto; white-space: nowrap; }
+    #count-badge { background: var(--accent); color: var(--sky); font-family: var(--mono); font-size: 0.75rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+
+    #live-dot { width: 8px; height: 8px; background: var(--climb); border-radius: 50%; flex-shrink: 0; animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(0.6); } }
+    #live-dot.error { background: var(--sink); animation: none; }
+
+    /* ── Map ── */
+    #map { position: fixed; top: 48px; left: 0; right: 0; bottom: 0; }
+    .leaflet-tile { filter: brightness(0.55) saturate(0.5) hue-rotate(190deg); }
+    /* Don't filter weather overlay tiles */
+    .weather-layer .leaflet-tile { filter: none !important; }
+
+    /* ── Weather controls ── */
+    #weather-controls {
+      position: fixed;
+      top: 60px; left: 12px;
+      z-index: 950;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .wx-btn {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 12px;
+      background: rgba(10, 22, 40, 0.88);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      backdrop-filter: blur(6px);
+      white-space: nowrap;
+      user-select: none;
+    }
+    .wx-btn:hover { border-color: var(--accent); }
+    .wx-btn.active { border-color: var(--accent); background: rgba(0, 212, 255, 0.12); color: var(--accent); }
+    .wx-btn .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Legend ── */
+    #wx-legend {
+      position: fixed;
+      bottom: 36px; left: 12px;
+      z-index: 950;
+      background: rgba(10, 22, 40, 0.9);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--text);
+      backdrop-filter: blur(6px);
+      display: none;
+      min-width: 180px;
+    }
+    #wx-legend.visible { display: block; }
+    #wx-legend-title { color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px; font-size: 0.65rem; }
+    .legend-bar { width: 100%; height: 10px; border-radius: 3px; margin: 4px 0 2px; }
+    .legend-labels { display: flex; justify-content: space-between; opacity: 0.6; font-size: 0.62rem; }
+
+    /* ── Side panel ── */
+    #panel {
+      position: fixed; top: 48px; right: 0; width: 260px; bottom: 0;
+      background: rgba(10, 22, 40, 0.92);
+      border-left: 1px solid var(--border);
+      overflow-y: auto; z-index: 900; padding: 12px 0;
+      display: flex; flex-direction: column; gap: 0;
+      transition: transform 0.3s;
+    }
+    #panel.hidden { transform: translateX(100%); }
+    #panel-title { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.15em; color: var(--accent); text-transform: uppercase; padding: 0 14px 10px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+
+    .glider-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px; padding: 8px 14px; cursor: pointer; border-bottom: 1px solid rgba(26,58,110,0.4); transition: background 0.15s; }
+    .glider-row:hover { background: rgba(0,212,255,0.07); }
+    .glider-row.selected { background: rgba(0,212,255,0.13); border-left: 2px solid var(--accent); }
+    .glider-reg { font-family: var(--mono); font-size: 0.82rem; color: #fff; letter-spacing: 0.06em; }
+    .glider-reg.anon { color: var(--text); opacity: 0.5; font-style: italic; }
+    .glider-alt { font-family: var(--mono); font-size: 0.7rem; color: var(--neutral); text-align: right; }
+    .glider-stats { font-size: 0.68rem; color: var(--text); opacity: 0.55; grid-column: 1 / -1; }
+    .climb-bar { grid-column: 1 / -1; height: 2px; border-radius: 1px; margin-top: 2px; }
+
+    /* ── Popup ── */
+    .leaflet-popup-content-wrapper { background: var(--panel) !important; border: 1px solid var(--border) !important; border-radius: 6px !important; box-shadow: 0 4px 24px rgba(0,0,0,0.6) !important; color: var(--text) !important; font-family: var(--sans) !important; }
+    .leaflet-popup-tip { background: var(--panel) !important; }
+    .leaflet-popup-close-button { color: var(--accent) !important; }
+    .popup-reg { font-family: var(--mono); font-size: 1rem; color: var(--accent); margin-bottom: 8px; letter-spacing: 0.08em; }
+    .popup-grid { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 0.8rem; }
+    .popup-label { color: var(--text); opacity: 0.55; }
+    .popup-value { font-family: var(--mono); color: #fff; }
+    .popup-climb { color: var(--climb); }
+    .popup-sink  { color: var(--sink); }
+
+    /* ── Toggle panel button ── */
+    #toggle-panel { position: fixed; bottom: 20px; right: 20px; z-index: 1100; background: var(--accent); color: var(--sky); border: none; border-radius: 50%; width: 44px; height: 44px; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(0,212,255,0.4); transition: background 0.2s; }
+    #toggle-panel:hover { background: #33dfff; }
+
+    #panel::-webkit-scrollbar { width: 4px; }
+    #panel::-webkit-scrollbar-track { background: transparent; }
+    #panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <div id="live-dot"></div>
+  <h1>OGN <span>Live Gliders</span></h1>
+  <span id="count-badge">0 gliders</span>
+  <span id="status">Connecting…</span>
+</div>
+
+<div id="map"></div>
+
+<!-- Weather layer toggles -->
+<div id="weather-controls">
+  <button class="wx-btn" data-layer="clouds_new">
+    <span class="dot" style="background:#aad4f5"></span>Cloud Cover
+  </button>
+  <button class="wx-btn" data-layer="precipitation_new">
+    <span class="dot" style="background:#5599ff"></span>Precipitation
+  </button>
+  <button class="wx-btn" data-layer="wind_new">
+    <span class="dot" style="background:#ffe066"></span>Wind Speed
+  </button>
+  <button class="wx-btn" data-layer="temp_new">
+    <span class="dot" style="background:#ff6b6b"></span>Temperature
+  </button>
+  <button class="wx-btn" data-layer="pressure_new">
+    <span class="dot" style="background:#b388ff"></span>Pressure
+  </button>
+</div>
+
+<!-- Legend -->
+<div id="wx-legend">
+  <div id="wx-legend-title">—</div>
+  <div class="legend-bar" id="wx-legend-bar"></div>
+  <div class="legend-labels" id="wx-legend-labels"></div>
+</div>
+
+<div id="panel">
+  <div id="panel-title">Aircraft in view</div>
+  <div id="glider-list"></div>
+</div>
+
+<button id="toggle-panel" title="Toggle panel">☰</button>
+
+<script>
+// ─────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────
+const OGN_PROXY_URL = '/ogn-proxy';    // Cloudflare Pages Function
+const WX_TILE_BASE  = '/wx-tile';      // Cloudflare Pages Function (catch-all)
+const POLL_INTERVAL_MS = 12000;
+
+// ─────────────────────────────────────────────
+// MAP SETUP
+// ─────────────────────────────────────────────
+const map = L.map('map', { zoomControl: false }).setView([48.5, 10.5], 7);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a> | OGN | OpenWeatherMap',
+  maxZoom: 18,
+}).addTo(map);
+
+L.control.zoom({ position: 'bottomleft' }).addTo(map);
+
+// ─────────────────────────────────────────────
+// WEATHER LAYERS
+// ─────────────────────────────────────────────
+const LAYER_META = {
+  clouds_new:        { label: 'Cloud Cover',    gradient: 'linear-gradient(to right,rgba(255,255,255,0),rgba(180,210,255,0.7),rgba(80,130,255,1))',          min: '0%',    max: '100%' },
+  precipitation_new: { label: 'Precipitation',  gradient: 'linear-gradient(to right,rgba(0,100,255,0),rgba(0,160,255,0.7),rgba(0,255,200,1))',               min: '0',     max: '140 mm/h' },
+  wind_new:          { label: 'Wind Speed',      gradient: 'linear-gradient(to right,#1a1a6e,#0066ff,#00ccff,#ffff00,#ff6600,#cc0000)',                       min: '0 m/s', max: '100 m/s' },
+  temp_new:          { label: 'Temperature',     gradient: 'linear-gradient(to right,#821692,#0000ff,#00bfff,#00ff00,#ffff00,#ff6600,#ff0000)',               min: '-40°C', max: '+40°C' },
+  pressure_new:      { label: 'Pressure',        gradient: 'linear-gradient(to right,#00008b,#0000ff,#00bfff,#7fff00,#ffff00,#ff6600,#ff0000)',               min: '950 hPa', max: '1070 hPa' },
+};
+
+let activeWeatherLayer = null;
+let activeLayerName    = null;
+
+function toggleWeather(btn) {
+  const layer = btn.dataset.layer;
+
+  if (activeLayerName === layer) {
+    // Toggle off
+    if (activeWeatherLayer) { map.removeLayer(activeWeatherLayer); activeWeatherLayer = null; }
+    activeLayerName = null;
+    document.querySelectorAll('.wx-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('wx-legend').classList.remove('visible');
+    return;
+  }
+
+  // Swap layer
+  if (activeWeatherLayer) map.removeLayer(activeWeatherLayer);
+  document.querySelectorAll('.wx-btn').forEach(b => b.classList.remove('active'));
+
+  // OWM tile URL format: /maps/1.0/weather/{layer}/{z}/{x}/{y}?appid=KEY
+  // We proxy this through /.netlify/functions/wx-tile/{z}/{x}/{y}?layer={layer}
+  activeWeatherLayer = L.tileLayer(
+    `${WX_TILE_BASE}/{z}/{x}/{y}?layer=${layer}`,
+    { opacity: 0.55, maxZoom: 18, className: 'weather-layer', zIndex: 500 }
+  ).addTo(map);
+
+  activeLayerName = layer;
+  btn.classList.add('active');
+
+  const meta = LAYER_META[layer];
+  document.getElementById('wx-legend-title').textContent        = meta.label;
+  document.getElementById('wx-legend-bar').style.background     = meta.gradient;
+  document.getElementById('wx-legend-labels').innerHTML         = `<span>${meta.min}</span><span>${meta.max}</span>`;
+  document.getElementById('wx-legend').classList.add('visible');
+}
+
+// Wire up weather buttons
+document.querySelectorAll('.wx-btn').forEach(btn => {
+  btn.addEventListener('click', () => toggleWeather(btn));
+});
+
+// ─────────────────────────────────────────────
+// GLIDER ICON
+// ─────────────────────────────────────────────
+function gliderIcon(heading, climbRate) {
+  const color = climbRate > 0.3 ? '#00ff88' : climbRate < -0.3 ? '#ff4d6d' : '#ffd700';
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
+      <g transform="rotate(${heading}, 14, 14)">
+        <path d="M14 3 L16 18 L14 16 L12 18 Z" fill="${color}" opacity="0.95"/>
+        <path d="M6 13 L22 13 L20 15 L8 15 Z" fill="${color}" opacity="0.8"/>
+        <path d="M11 17 L17 17 L16 19 L12 19 Z" fill="${color}" opacity="0.7"/>
+        <circle cx="14" cy="4" r="1.5" fill="#fff" opacity="0.9"/>
+      </g>
+    </svg>`;
+  return L.divIcon({ html: svg, className: '', iconSize: [28, 28], iconAnchor: [14, 14] });
+}
+
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+const markers  = {};
+let gliderData = {};
+let selectedId = null;
+
+// ─────────────────────────────────────────────
+// POPUP
+// ─────────────────────────────────────────────
+function popupHtml(g) {
+  const climbClass = g.climbRate > 0 ? 'popup-climb' : g.climbRate < 0 ? 'popup-sink' : '';
+  const climbStr   = (g.climbRate >= 0 ? '+' : '') + g.climbRate.toFixed(1) + ' m/s';
+  return `
+    <div class="popup-reg">${g.registration}</div>
+    <div class="popup-grid">
+      <span class="popup-label">Altitude</span>
+      <span class="popup-value">${g.altitudeM.toLocaleString()} m (${g.altitudeFt.toLocaleString()} ft)</span>
+      <span class="popup-label">Speed</span>
+      <span class="popup-value">${g.speedKmh} km/h</span>
+      <span class="popup-label">Heading</span>
+      <span class="popup-value">${g.heading}°</span>
+      <span class="popup-label">Vario</span>
+      <span class="popup-value ${climbClass}">${climbStr}</span>
+      <span class="popup-label">Last seen</span>
+      <span class="popup-value">${g.timeUtc} UTC</span>
+      <span class="popup-label">Via</span>
+      <span class="popup-value">${g.receiver || '—'}</span>
+    </div>`;
+}
+
+// ─────────────────────────────────────────────
+// MAP UPDATE
+// ─────────────────────────────────────────────
+function updateMap(gliders) {
+  const seen = new Set();
+  gliders.forEach(g => {
+    const id = g.deviceId || (g.lat + ',' + g.lng);
+    seen.add(id);
+    gliderData[id] = g;
+    if (markers[id]) {
+      markers[id].setLatLng([g.lat, g.lng]);
+      markers[id].setIcon(gliderIcon(g.heading, g.climbRate));
+      if (markers[id].isPopupOpen()) markers[id].setPopupContent(popupHtml(g));
+    } else {
+      const m = L.marker([g.lat, g.lng], { icon: gliderIcon(g.heading, g.climbRate) })
+        .bindPopup(popupHtml(g), { maxWidth: 260 })
+        .addTo(map);
+      m.on('click', () => selectGlider(id));
+      markers[id] = m;
+    }
+  });
+  Object.keys(markers).forEach(id => {
+    if (!seen.has(id)) { markers[id].remove(); delete markers[id]; delete gliderData[id]; }
+  });
+  updatePanel(gliders);
+}
+
+// ─────────────────────────────────────────────
+// PANEL
+// ─────────────────────────────────────────────
+function updatePanel(gliders) {
+  const list   = document.getElementById('glider-list');
+  const sorted = [...gliders].sort((a, b) => b.altitudeM - a.altitudeM);
+  list.innerHTML = sorted.map(g => {
+    const id         = g.deviceId || (g.lat + ',' + g.lng);
+    const climbColor = g.climbRate > 0.3 ? '#00ff88' : g.climbRate < -0.3 ? '#ff4d6d' : '#ffd700';
+    const climbWidth = Math.min(Math.abs(g.climbRate) * 20, 100);
+    const isSelected = id === selectedId;
+    return `
+      <div class="glider-row${isSelected ? ' selected' : ''}" onclick="selectGlider('${id}')">
+        <span class="glider-reg${g.isAnonymous ? ' anon' : ''}">${g.registration}</span>
+        <span class="glider-alt">${g.altitudeM.toLocaleString()}m</span>
+        <span class="glider-stats">${g.speedKmh} km/h · ${g.heading}° · ${g.climbRate >= 0 ? '+' : ''}${g.climbRate.toFixed(1)} m/s</span>
+        <div class="climb-bar" style="background:${climbColor};width:${climbWidth}%;opacity:0.6"></div>
+      </div>`;
+  }).join('');
+}
+
+function selectGlider(id) {
+  selectedId = id;
+  const g = gliderData[id];
+  if (!g) return;
+  map.setView([g.lat, g.lng], Math.max(map.getZoom(), 10), { animate: true });
+  if (markers[id]) markers[id].openPopup();
+  updatePanel(Object.values(gliderData));
+}
+window.selectGlider = selectGlider;
+
+// ─────────────────────────────────────────────
+// OGN POLLING
+// ─────────────────────────────────────────────
+async function fetchGliders() {
+  const bounds = map.getBounds();
+  const params = new URLSearchParams({
+    latMin: bounds.getSouth().toFixed(4),
+    latMax: bounds.getNorth().toFixed(4),
+    lngMin: bounds.getWest().toFixed(4),
+    lngMax: bounds.getEast().toFixed(4),
+  });
+  try {
+    const res  = await fetch(`${OGN_PROXY_URL}?${params}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    updateMap(data.gliders || []);
+    document.getElementById('live-dot').classList.remove('error');
+    document.getElementById('count-badge').textContent = `${data.count} gliders`;
+    document.getElementById('status').textContent = `Updated ${new Date(data.fetchedAt).toLocaleTimeString()}`;
+  } catch (err) {
+    document.getElementById('live-dot').classList.add('error');
+    document.getElementById('status').textContent = `Error: ${err.message}`;
+  }
+}
+
+fetchGliders();
+setInterval(fetchGliders, POLL_INTERVAL_MS);
+map.on('moveend', () => { clearTimeout(map._ognFetchTimer); map._ognFetchTimer = setTimeout(fetchGliders, 600); });
+
+document.getElementById('toggle-panel').addEventListener('click', () => {
+  document.getElementById('panel').classList.toggle('hidden');
+});
+</script>
+</body>
+</html>
