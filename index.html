@@ -674,12 +674,8 @@ function updateMap(gliders) {
         // Fetch extra data once and cache on the marker
         if (!m._ognExtra) {
           try {
-            const res  = await fetch(`https://ddb.glidernet.org/download/?t=1&j=1&k=${(g.deviceId || '').toUpperCase()}`);
-            const data = await res.json();
-            const devId = (g.deviceId || '').toUpperCase();
-            const match = data.devices && data.devices.find(d =>
-              d.device_id && d.device_id.toUpperCase() === devId
-            );
+            const res   = g.deviceId ? await fetch(`/glider-info?id=${encodeURIComponent(g.deviceId)}`) : null;
+            const match = res && res.ok ? await res.json() : null;
             if (match) {
               m._ognExtra = `
                 <span class="popup-label">Registration</span>
@@ -795,21 +791,18 @@ document.getElementById('wind-arrows-btn').addEventListener('click', function() 
 async function fetchWindArrows() {
   if (!windArrowsActive) return;
 
-  const zoom   = map.getZoom();
-  const steps  = zoom < 5 ? 3 : zoom < 7 ? 5 : zoom < 9 ? 8 : zoom < 11 ? 12 : 16;
-  const maxPoints = zoom < 7 ? 16 : zoom < 10 ? 36 : 64;
+  const zoom  = map.getZoom();
+  const steps = zoom < 6 ? 3 : zoom < 8 ? 4 : zoom < 10 ? 5 : 6;
 
-  // Sample the actual screen corners using pixel coordinates
-  const size   = map.getSize();
-  const sw     = map.containerPointToLatLng(L.point(0, size.y));
-  const ne     = map.containerPointToLatLng(L.point(size.x, 0));
-  const nw     = map.containerPointToLatLng(L.point(0, 0));
-  const se     = map.containerPointToLatLng(L.point(size.x, size.y));
+  const bounds  = map.getBounds();
+  const latSpan = bounds.getNorth() - bounds.getSouth();
+  const lngSpan = bounds.getEast()  - bounds.getWest();
 
-  const south  = Math.min(sw.lat, se.lat);
-  const north  = Math.max(nw.lat, ne.lat);
-  const west   = Math.min(nw.lng, sw.lng);
-  const east   = Math.max(ne.lng, se.lng);
+  // Oversample by 40% to cover header/panel offsets
+  const south = bounds.getSouth() - latSpan * 0.4;
+  const north = bounds.getNorth() + latSpan * 0.4;
+  const west  = bounds.getWest()  - lngSpan * 0.4;
+  const east  = bounds.getEast()  + lngSpan * 0.4;
 
   const latStep = (north - south) / steps;
   const lngStep = (east  - west)  / steps;
@@ -824,33 +817,31 @@ async function fetchWindArrows() {
     }
   }
 
-  const batch = points.slice(0, maxPoints);
-  const results = await Promise.all(batch.map(async p => {
+  // Fetch all points in parallel — each has its own 4s timeout
+  const results = await Promise.all(points.map(async p => {
     try {
-      const url = `/wind-data?lat=${p.lat.toFixed(3)}&lon=${p.lng.toFixed(3)}`;
-      const res = await fetch(url);
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch(`/wind-data?lat=${p.lat.toFixed(2)}&lon=${p.lng.toFixed(2)}`, { signal: controller.signal });
+      clearTimeout(tid);
       if (!res.ok) return null;
       const d = await res.json();
       return { lat: p.lat, lng: p.lng, speed: d.speed, deg: d.deg };
     } catch { return null; }
   }));
 
-  // Remove old arrows
+  // Remove old layer
   if (windArrowLayer) { map.removeLayer(windArrowLayer); windArrowLayer = null; }
 
-  // Draw new arrows
   const arrowMarkers = results.filter(Boolean).map(w => {
     const speedKmh = Math.round(w.speed * 3.6);
-    const color = w.speed < 5 ? '#00ff88' : w.speed < 10 ? '#ffd700' : w.speed < 20 ? '#ff8c00' : '#ff4d6d';
-
-    // Arrow SVG pointing in wind direction
+    const color = w.speed < 3 ? '#00ff88' : w.speed < 8 ? '#ffd700' : w.speed < 15 ? '#ff8c00' : '#ff4d6d';
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <g transform="rotate(${(w.deg + 180) % 360}, 16, 16)">
-    <line x1="16" y1="26" x2="16" y2="8" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
-    <polygon points="16,4 11,12 21,12" fill="${color}"/>
-  </g>
-</svg>`;
-
+      <g transform="rotate(${(w.deg + 180) % 360}, 16, 16)">
+        <line x1="16" y1="26" x2="16" y2="8" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+        <polygon points="16,4 11,12 21,12" fill="${color}"/>
+      </g>
+    </svg>`;
     return L.marker([w.lat, w.lng], {
       icon: L.divIcon({ html: svg, className: '', iconSize: [32, 32], iconAnchor: [16, 16] }),
       interactive: true,
