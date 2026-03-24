@@ -554,7 +554,7 @@ function gliderIcon(heading, climbRate, registration) {
 // ─────────────────────────────────────────────
 const markers    = {};
 const trails     = {}; // deviceId → L.polyline
-const trailData  = {}; // deviceId → [{lat,lng,t}, ...]
+const trailData  = {}; // deviceId → [{lat,lng,t}, ...] — persists across map moves
 let gliderData   = {};
 let selectedId   = null;
 const altHistory   = {}; // deviceId → [{t, alt}, ...] for rolling vario calc
@@ -565,13 +565,14 @@ const posHistory   = {}; // deviceId → [{lat, lng, t}, ...] for speed calc
 // ─────────────────────────────────────────────
 function buildPopup(g, extraHtml) {
   const climbClass = g.climbRate > 0 ? 'popup-climb' : g.climbRate < 0 ? 'popup-sink' : '';
-  const climbStr   = (g.climbRate >= 0 ? '+' : '') + g.climbRate.toFixed(1) + ' m/s';
+  const varioKts = (g.climbRate * 1.94384).toFixed(1);
+  const climbStr = (g.climbRate >= 0 ? '+' : '') + varioKts + ' kts';
   return `
     <div class="popup-reg">${g.registration}</div>
     <div class="popup-grid">
       ${extraHtml}
       <span class="popup-label">Altitude</span>
-      <span class="popup-value">${g.altitudeM.toLocaleString()} m (${g.altitudeFt.toLocaleString()} ft)</span>
+      <span class="popup-value">${g.altitudeFt.toLocaleString()} ft</span>
       <span class="popup-label">Speed</span>
       <span class="popup-value">${g.speedKmh} km/h</span>
       <span class="popup-label">Heading</span>
@@ -640,8 +641,8 @@ function updateMap(gliders) {
     const last = trailData[id][trailData[id].length - 1];
     if (!last || last.lat !== g.lat || last.lng !== g.lng) {
       trailData[id].push({ lat: g.lat, lng: g.lng, t: Date.now() });
-      // Keep last 10 minutes of trail
-      const cutoff = Date.now() - 10 * 60 * 1000;
+      // Keep last 30 minutes of trail
+      const cutoff = Date.now() - 30 * 60 * 1000;
       trailData[id] = trailData[id].filter(p => p.t > cutoff);
     }
     const trailColor = g.climbRate > 0.3 ? '#00cc44' : g.climbRate < -0.3 ? '#ff4d6d' : '#ffaa00';
@@ -699,7 +700,16 @@ function updateMap(gliders) {
   Object.keys(markers).forEach(id => {
     if (!seen.has(id)) {
       markers[id].remove(); delete markers[id]; delete gliderData[id];
-      if (trails[id])      { trails[id].remove();  delete trails[id];   delete trailData[id]; }
+      // Keep trail visible for 30 mins even if glider drops off OGN temporarily
+      const trailCutoff = Date.now() - 30 * 60 * 1000;
+      if (trails[id] && trailData[id]) {
+        trailData[id] = trailData[id].filter(p => p.t > trailCutoff);
+        if (trailData[id].length === 0) {
+          trails[id].remove(); delete trails[id]; delete trailData[id];
+        } else {
+          trails[id].setLatLngs(trailData[id].map(p => [p.lat, p.lng]));
+        }
+      }
       if (posHistory[id])  { delete posHistory[id]; }
       if (altHistory[id])  { delete altHistory[id]; }
     }
@@ -721,8 +731,8 @@ function updatePanel(gliders) {
     return `
       <div class="glider-row${isSelected ? ' selected' : ''}" onclick="selectGlider('${id}')">
         <span class="glider-reg${g.isAnonymous ? ' anon' : ''}">${g.registration}</span>
-        <span class="glider-alt">${g.altitudeM.toLocaleString()}m</span>
-        <span class="glider-stats">${g.speedKmh} km/h · ${g.heading}° · ${g.climbRate >= 0 ? '+' : ''}${g.climbRate.toFixed(1)} m/s</span>
+        <span class="glider-alt">${g.altitudeFt.toLocaleString()}ft</span>
+        <span class="glider-stats">${g.speedKmh} km/h · ${g.heading}° · ${g.climbRate >= 0 ? '+' : ''}${(g.climbRate * 1.94384).toFixed(1)} kts</span>
         <div class="climb-bar" style="background:${climbColor};width:${climbWidth}%;opacity:0.6"></div>
       </div>`;
   }).join('');
