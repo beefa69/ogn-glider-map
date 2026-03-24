@@ -49,9 +49,13 @@
 
     /* ── Map ── */
     #map { position: fixed; top: 48px; left: 0; right: 0; bottom: 0; }
-    .leaflet-tile { filter: brightness(0.55) saturate(0.5) hue-rotate(190deg); }
-    /* Don't filter weather overlay tiles */
-    .weather-layer .leaflet-tile { filter: none !important; }
+    .leaflet-tile { filter: brightness(0.85) saturate(0.8); }
+    .satellite-mode .leaflet-tile { filter: none !important; }
+    /* Weather overlay — screen blend makes colours vivid on the dark map */
+    .weather-layer .leaflet-tile {
+      filter: saturate(2.5) contrast(1.3) !important;
+      mix-blend-mode: screen;
+    }
 
     /* ── Weather controls ── */
     #weather-controls {
@@ -60,39 +64,75 @@
       z-index: 950;
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 0;
+      background: rgba(10, 22, 40, 0.98);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+      min-width: 160px;
     }
+
+    #wx-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+    }
+    #wx-header-title {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.15em;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+    #wx-chevron {
+      font-size: 0.7rem;
+      color: var(--accent);
+      transition: transform 0.25s;
+    }
+    #wx-chevron.collapsed { transform: rotate(-90deg); }
+
+    #wx-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      overflow: hidden;
+      max-height: 400px;
+      transition: max-height 0.3s cubic-bezier(0.4,0,0.2,1);
+    }
+    #wx-body.collapsed { max-height: 0; }
 
     .wx-btn {
       display: flex; align-items: center; gap: 8px;
-      padding: 6px 12px;
-      background: rgba(10, 22, 40, 0.88);
-      border: 1px solid var(--border);
-      border-radius: 5px;
+      padding: 8px 12px;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid rgba(26,58,110,0.4);
       color: var(--text);
       font-family: var(--mono);
       font-size: 0.72rem;
       letter-spacing: 0.06em;
       cursor: pointer;
-      transition: border-color 0.15s, background 0.15s;
-      backdrop-filter: blur(6px);
+      transition: background 0.15s;
       white-space: nowrap;
       user-select: none;
+      width: 100%;
+      text-align: left;
     }
-    .wx-btn:hover { border-color: var(--accent); }
-    .wx-btn.active { border-color: var(--accent); background: rgba(0, 212, 255, 0.12); color: var(--accent); }
+    .wx-btn:hover { background: rgba(0,212,255,0.07); }
+    .wx-btn.active { background: rgba(0,212,255,0.12); color: var(--accent); }
     .wx-btn .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
     .wx-opacity-row {
       display: flex; align-items: center; gap: 6px;
-      padding: 6px 12px;
-      background: rgba(10, 22, 40, 0.88);
-      border: 1px solid var(--border);
-      border-radius: 5px;
+      padding: 8px 12px;
       font-family: var(--mono);
       font-size: 0.68rem;
       color: var(--text);
-      backdrop-filter: blur(6px);
     }
     .wx-opacity-row input[type=range] {
       flex: 1; height: 3px; accent-color: var(--accent); cursor: pointer;
@@ -123,13 +163,19 @@
     /* ── Side panel ── */
     #panel {
       position: fixed; top: 48px; right: 0; width: 260px; bottom: 0;
-      background: rgba(10, 22, 40, 0.92);
+      background: rgba(10, 22, 40, 0.98);
       border-left: 1px solid var(--border);
       overflow-y: auto; z-index: 900; padding: 12px 0;
       display: flex; flex-direction: column; gap: 0;
-      transition: transform 0.3s;
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: -4px 0 24px rgba(0,0,0,0.5);
     }
     #panel.hidden { transform: translateX(100%); }
+
+    @media (max-width: 768px) {
+      #panel { width: 85vw; }
+      #panel.hidden { transform: translateX(100%); }
+    }
     #panel-title { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.15em; color: var(--accent); text-transform: uppercase; padding: 0 14px 10px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
 
     .glider-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px; padding: 8px 14px; cursor: pointer; border-bottom: 1px solid rgba(26,58,110,0.4); transition: background 0.15s; }
@@ -153,12 +199,39 @@
     .popup-sink  { color: var(--sink); }
 
     /* ── Toggle panel button ── */
-    #toggle-panel { position: fixed; bottom: 20px; right: 20px; z-index: 1100; background: var(--accent); color: var(--sky); border: none; border-radius: 50%; width: 44px; height: 44px; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(0,212,255,0.4); transition: background 0.2s; }
+    #toggle-panel {
+      position: fixed; bottom: 20px; right: 20px; z-index: 1100;
+      background: var(--accent); color: var(--sky); border: none;
+      border-radius: 50%; width: 48px; height: 48px; font-size: 1.3rem;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 16px rgba(0,212,255,0.4); transition: background 0.2s, right 0.35s cubic-bezier(0.4,0,0.2,1);
+    }
     #toggle-panel:hover { background: #33dfff; }
+    #toggle-panel.panel-open { right: 275px; }
+    @media (max-width: 768px) { #toggle-panel.panel-open { right: calc(85vw + 12px); } }
+
+    /* Overlay behind panel on mobile */
+    #panel-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 899;
+    }
+    #panel-overlay.visible { display: block; }
 
     #panel::-webkit-scrollbar { width: 4px; }
     #panel::-webkit-scrollbar-track { background: transparent; }
     #panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* Wind tooltip */
+    .wind-tooltip {
+      background: rgba(10,22,40,0.9) !important;
+      border: 1px solid var(--border) !important;
+      color: var(--accent) !important;
+      font-family: var(--mono) !important;
+      font-size: 0.7rem !important;
+      border-radius: 4px !important;
+    }
   </style>
 </head>
 <body>
@@ -171,28 +244,42 @@
 </div>
 
 <div id="map"></div>
+<div id="panel-overlay"></div>
 
 <!-- Weather layer toggles -->
 <div id="weather-controls">
-  <button class="wx-btn" data-layer="clouds_new">
-    <span class="dot" style="background:#aad4f5"></span>Cloud Cover
-  </button>
-  <button class="wx-btn" data-layer="precipitation_new">
-    <span class="dot" style="background:#5599ff"></span>Precipitation
-  </button>
-  <button class="wx-btn" data-layer="wind_new">
-    <span class="dot" style="background:#ffe066"></span>Wind Speed
-  </button>
-  <button class="wx-btn" data-layer="temp_new">
-    <span class="dot" style="background:#ff6b6b"></span>Temperature
-  </button>
-  <button class="wx-btn" data-layer="pressure_new">
-    <span class="dot" style="background:#b388ff"></span>Pressure
-  </button>
-  <div class="wx-opacity-row">
-    <span>Opacity</span>
-    <input type="range" id="wx-opacity" min="0.1" max="1" step="0.05" value="0.55" />
-    <span id="wx-opacity-val">55%</span>
+  <div id="wx-header">
+    <span id="wx-header-title">Overlays</span>
+    <span id="wx-chevron">▼</span>
+  </div>
+  <div id="wx-body">
+    <button class="wx-btn" id="satellite-btn">
+      <span class="dot" style="background:#8bc34a"></span>Satellite View
+    </button>
+    <div style="height:1px;background:var(--border);margin:0"></div>
+    <button class="wx-btn" data-layer="clouds_new">
+      <span class="dot" style="background:#aad4f5"></span>Cloud Cover
+    </button>
+    <button class="wx-btn" data-layer="precipitation_new">
+      <span class="dot" style="background:#5599ff"></span>Precipitation
+    </button>
+    <button class="wx-btn" data-layer="wind_new">
+      <span class="dot" style="background:#ffe066"></span>Wind Speed
+    </button>
+    <button class="wx-btn" id="wind-arrows-btn">
+      <span class="dot" style="background:#ffffff"></span>Wind Arrows
+    </button>
+    <button class="wx-btn" data-layer="temp_new">
+      <span class="dot" style="background:#ff6b6b"></span>Temperature
+    </button>
+    <button class="wx-btn" data-layer="pressure_new">
+      <span class="dot" style="background:#b388ff"></span>Pressure
+    </button>
+    <div class="wx-opacity-row">
+      <span>Opacity</span>
+      <input type="range" id="wx-opacity" min="0.1" max="1" step="0.05" value="0.85" />
+      <span id="wx-opacity-val">85%</span>
+    </div>
   </div>
 </div>
 
@@ -216,19 +303,113 @@
 // ─────────────────────────────────────────────
 const OGN_PROXY_URL = '/ogn-proxy';    // Cloudflare Pages Function
 const WX_TILE_BASE  = '/wx-tile';      // Cloudflare Pages Function (catch-all)
-const POLL_INTERVAL_MS = 12000;
+const POLL_INTERVAL_MS = 3000;
+
+// Restrict OGN data to Australia
+const BOUNDS_LIMIT = {
+  latMin: -48, latMax: -8,
+  lngMin: 108, lngMax: 162,
+};
 
 // ─────────────────────────────────────────────
 // MAP SETUP
 // ─────────────────────────────────────────────
-const map = L.map('map', { zoomControl: false }).setView([48.5, 10.5], 7);
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a> | OGN | OpenWeatherMap',
-  maxZoom: 18,
-}).addTo(map);
+const map = L.map('map', { zoomControl: false }).setView([-33.28488982887025, 151.21324330464512], 9, {
+  maxBounds: [[-48, 108], [-8, 162]],
+  maxBoundsViscosity: 1.0,
+});
+map.setMaxBounds([[-48, 108], [-8, 162]]);
 
 L.control.zoom({ position: 'bottomleft' }).addTo(map);
+
+// Base map layers
+const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a> | OGN | OpenWeatherMap',
+  maxZoom: 18,
+});
+
+const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  attribution: '© Esri, Maxar, Earthstar Geographics',
+  maxZoom: 19,
+});
+
+streetLayer.addTo(map);
+let satelliteActive = false;
+
+// Central Coast Soaring Club marker
+L.marker([-33.28488982887025, 151.21324330464512], {
+  icon: L.divIcon({
+    html: `<div style="
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.72rem;
+      color: #ffffff;
+      background: rgba(0, 80, 160, 0.92);
+      border: 1px solid #00d4ff;
+      border-radius: 4px;
+      padding: 3px 8px;
+      white-space: nowrap;
+      transform: translateX(-50%);
+      pointer-events: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+      font-weight: bold;
+      letter-spacing: 0.05em;
+    ">✈ Central Coast Soaring Club</div>`,
+    className: '',
+    iconAnchor: [0, 0],
+  }),
+  interactive: false,
+  zIndexOffset: -1000,
+}).addTo(map);
+
+// Hunter Valley Gliding Club marker
+L.marker([-32.54856887072558, 151.023106754768], {
+  icon: L.divIcon({
+    html: `<div style="
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.72rem;
+      color: #ffffff;
+      background: rgba(0, 80, 160, 0.92);
+      border: 1px solid #00d4ff;
+      border-radius: 4px;
+      padding: 3px 8px;
+      white-space: nowrap;
+      transform: translateX(-50%);
+      pointer-events: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+      font-weight: bold;
+      letter-spacing: 0.05em;
+    ">✈ Hunter Valley Gliding Club</div>`,
+    className: '',
+    iconAnchor: [0, 0],
+  }),
+  interactive: false,
+  zIndexOffset: -1000,
+}).addTo(map);
+
+// Lake Keepit Gliding Club marker
+L.marker([-30.854946531043954, 150.50235795027774], {
+  icon: L.divIcon({
+    html: `<div style="
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.72rem;
+      color: #ffffff;
+      background: rgba(0, 80, 160, 0.92);
+      border: 1px solid #00d4ff;
+      border-radius: 4px;
+      padding: 3px 8px;
+      white-space: nowrap;
+      transform: translateX(-50%);
+      pointer-events: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+      font-weight: bold;
+      letter-spacing: 0.05em;
+    ">✈ Lake Keepit Gliding Club</div>`,
+    className: '',
+    iconAnchor: [0, 0],
+  }),
+  interactive: false,
+  zIndexOffset: -1000,
+}).addTo(map);
 
 // ─────────────────────────────────────────────
 // WEATHER LAYERS
@@ -243,7 +424,7 @@ const LAYER_META = {
 
 // Multi-layer support — each layer has its own Leaflet tile layer instance
 const activeLayers = {}; // layerName → L.tileLayer
-let weatherOpacity = 0.55;
+let weatherOpacity = 0.85;
 
 function toggleWeather(btn) {
   const layer = btn.dataset.layer;
@@ -296,39 +477,99 @@ document.querySelectorAll('.wx-btn').forEach(btn => {
   btn.addEventListener('click', () => toggleWeather(btn));
 });
 
+// Collapsible overlays panel
+const wxHeader  = document.getElementById('wx-header');
+const wxBody    = document.getElementById('wx-body');
+const wxChevron = document.getElementById('wx-chevron');
+
+// Start collapsed on mobile
+if (window.innerWidth <= 768) {
+  wxBody.classList.add('collapsed');
+  wxChevron.classList.add('collapsed');
+}
+
+wxHeader.addEventListener('click', () => {
+  wxBody.classList.toggle('collapsed');
+  wxChevron.classList.toggle('collapsed');
+});
+
+// Satellite toggle
+document.getElementById('satellite-btn').addEventListener('click', function() {
+  satelliteActive = !satelliteActive;
+  this.classList.toggle('active', satelliteActive);
+  if (satelliteActive) {
+    map.removeLayer(streetLayer);
+    satelliteLayer.addTo(map);
+    satelliteLayer.bringToBack();
+    map.getContainer().classList.add('satellite-mode');
+    // Satellite is bright — reduce weather overlay filter for better contrast
+    document.querySelectorAll('.weather-layer .leaflet-tile').forEach(t => {
+      t.style.mixBlendMode = 'multiply';
+    });
+  } else {
+    map.removeLayer(satelliteLayer);
+    streetLayer.addTo(map);
+    streetLayer.bringToBack();
+    map.getContainer().classList.remove('satellite-mode');
+    document.querySelectorAll('.weather-layer .leaflet-tile').forEach(t => {
+      t.style.mixBlendMode = '';
+    });
+  }
+});
+
 // ─────────────────────────────────────────────
 // GLIDER ICON
 // ─────────────────────────────────────────────
-function gliderIcon(heading, climbRate) {
-  const color = climbRate > 0.3 ? '#00ff88' : climbRate < -0.3 ? '#ff4d6d' : '#ffd700';
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
-      <g transform="rotate(${heading}, 14, 14)">
-        <path d="M14 3 L16 18 L14 16 L12 18 Z" fill="${color}" opacity="0.95"/>
-        <path d="M6 13 L22 13 L20 15 L8 15 Z" fill="${color}" opacity="0.8"/>
-        <path d="M11 17 L17 17 L16 19 L12 19 Z" fill="${color}" opacity="0.7"/>
-        <circle cx="14" cy="4" r="1.5" fill="#fff" opacity="0.9"/>
-      </g>
-    </svg>`;
-  return L.divIcon({ html: svg, className: '', iconSize: [28, 28], iconAnchor: [14, 14] });
+function gliderIcon(heading, climbRate, registration) {
+  const color = climbRate > 0.3 ? '#00cc44' : climbRate < -0.3 ? '#ff4d6d' : '#ffaa00';
+  const label = registration && registration !== '(anon)' ? registration : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+    <g transform="rotate(${heading}, 20, 20)">
+      <ellipse cx="20" cy="20" rx="2.2" ry="11" fill="${color}" opacity="0.95"/>
+      <ellipse cx="20" cy="10" rx="1.2" ry="3" fill="${color}" opacity="0.95"/>
+      <path d="M20,19 Q12,17 2,20 Q12,22 20,21 Z" fill="${color}" opacity="0.88"/>
+      <path d="M20,19 Q28,17 38,20 Q28,22 20,21 Z" fill="${color}" opacity="0.88"/>
+      <path d="M20,29 Q16,28 13,30 Q16,31 20,30 Z" fill="${color}" opacity="0.8"/>
+      <path d="M20,29 Q24,28 27,30 Q24,31 20,30 Z" fill="${color}" opacity="0.8"/>
+      <path d="M20,27 L20,31" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>
+    </g>
+  </svg>
+  ${label ? `<div style="
+    position:absolute; top:42px; left:50%; transform:translateX(-50%);
+    font-family:'Share Tech Mono',monospace; font-size:0.65rem;
+    color:#fff; background:rgba(0,0,0,0.65);
+    padding:1px 5px; border-radius:3px; white-space:nowrap;
+    border:1px solid ${color}; letter-spacing:0.05em;
+  ">${label}</div>` : ''}`;
+  return L.divIcon({
+    html: `<div style="position:relative;width:40px;height:40px">${svg}</div>`,
+    className: '',
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+  });
 }
 
 // ─────────────────────────────────────────────
 // STATE
 // ─────────────────────────────────────────────
-const markers  = {};
-let gliderData = {};
-let selectedId = null;
+const markers    = {};
+const trails     = {}; // deviceId → L.polyline
+const trailData  = {}; // deviceId → [{lat,lng,t}, ...]
+let gliderData   = {};
+let selectedId   = null;
+const altHistory   = {}; // deviceId → [{t, alt}, ...] for rolling vario calc
+const posHistory   = {}; // deviceId → [{lat, lng, t}, ...] for speed calc
 
 // ─────────────────────────────────────────────
 // POPUP
 // ─────────────────────────────────────────────
-function popupHtml(g) {
+function buildPopup(g, extraHtml) {
   const climbClass = g.climbRate > 0 ? 'popup-climb' : g.climbRate < 0 ? 'popup-sink' : '';
   const climbStr   = (g.climbRate >= 0 ? '+' : '') + g.climbRate.toFixed(1) + ' m/s';
   return `
     <div class="popup-reg">${g.registration}</div>
     <div class="popup-grid">
+      ${extraHtml}
       <span class="popup-label">Altitude</span>
       <span class="popup-value">${g.altitudeM.toLocaleString()} m (${g.altitudeFt.toLocaleString()} ft)</span>
       <span class="popup-label">Speed</span>
@@ -339,8 +580,10 @@ function popupHtml(g) {
       <span class="popup-value ${climbClass}">${climbStr}</span>
       <span class="popup-label">Last seen</span>
       <span class="popup-value">${g.timeUtc} UTC</span>
-      <span class="popup-label">Via</span>
+      <span class="popup-label">Receiver</span>
       <span class="popup-value">${g.receiver || '—'}</span>
+      <span class="popup-label">Device ID</span>
+      <span class="popup-value">${g.deviceId || '—'}</span>
     </div>`;
 }
 
@@ -352,21 +595,118 @@ function updateMap(gliders) {
   gliders.forEach(g => {
     const id = g.deviceId || (g.lat + ',' + g.lng);
     seen.add(id);
+    const now = Date.now();
+
+    // Rolling vario — 30s altitude history
+    if (!altHistory[id]) altHistory[id] = [];
+    altHistory[id].push({ t: now, alt: g.altitudeM });
+    altHistory[id] = altHistory[id].filter(e => now - e.t <= 30000);
+    if (altHistory[id].length >= 2) {
+      const oldest = altHistory[id][0];
+      const newest = altHistory[id][altHistory[id].length - 1];
+      const dtSec  = (newest.t - oldest.t) / 1000;
+      if (dtSec > 0) g.climbRate = parseFloat(((newest.alt - oldest.alt) / dtSec).toFixed(1));
+    }
+
+    // Rolling ground speed — calculated from GPS position changes over 30s
+    if (!posHistory[id]) posHistory[id] = [];
+    posHistory[id].push({ t: now, lat: g.lat, lng: g.lng });
+    posHistory[id] = posHistory[id].filter(e => now - e.t <= 30000);
+    if (posHistory[id].length >= 2) {
+      const oldest = posHistory[id][0];
+      const newest = posHistory[id][posHistory[id].length - 1];
+      const dtSec  = (newest.t - oldest.t) / 1000;
+      if (dtSec > 1) {
+        // Haversine distance in km
+        const R    = 6371;
+        const dLat = (newest.lat - oldest.lat) * Math.PI / 180;
+        const dLng = (newest.lng - oldest.lng) * Math.PI / 180;
+        const a    = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                     Math.cos(oldest.lat * Math.PI/180) * Math.cos(newest.lat * Math.PI/180) *
+                     Math.sin(dLng/2) * Math.sin(dLng/2);
+        const distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const calcSpeedKmh = Math.round((distKm / dtSec) * 3600);
+        // Only use calculated speed if it seems reasonable (10–350 km/h)
+        // and is higher than raw OGN value (OGN often under-reports)
+        if (calcSpeedKmh >= 10 && calcSpeedKmh <= 350) {
+          g.speedKmh = calcSpeedKmh;
+        }
+      }
+    }
     gliderData[id] = g;
+
+    // Update trail
+    if (!trailData[id]) trailData[id] = [];
+    const last = trailData[id][trailData[id].length - 1];
+    if (!last || last.lat !== g.lat || last.lng !== g.lng) {
+      trailData[id].push({ lat: g.lat, lng: g.lng, t: Date.now() });
+      // Keep last 10 minutes of trail
+      const cutoff = Date.now() - 10 * 60 * 1000;
+      trailData[id] = trailData[id].filter(p => p.t > cutoff);
+    }
+    const trailColor = g.climbRate > 0.3 ? '#00cc44' : g.climbRate < -0.3 ? '#ff4d6d' : '#ffaa00';
+    const latlngs = trailData[id].map(p => [p.lat, p.lng]);
+    if (trails[id]) {
+      trails[id].setLatLngs(latlngs);
+      trails[id].setStyle({ color: trailColor });
+    } else {
+      trails[id] = L.polyline(latlngs, {
+        color: trailColor, weight: 2, opacity: 0.7,
+        dashArray: '4 4', smoothFactor: 1,
+      }).addTo(map);
+    }
+
+    // Update marker
     if (markers[id]) {
       markers[id].setLatLng([g.lat, g.lng]);
-      markers[id].setIcon(gliderIcon(g.heading, g.climbRate));
-      if (markers[id].isPopupOpen()) markers[id].setPopupContent(popupHtml(g));
+      markers[id].setIcon(gliderIcon(g.heading, g.climbRate, g.registration));
+      // Only update open popup with live flight data, never reset to Loading
+      if (markers[id].isPopupOpen()) {
+        const cached = markers[id]._ognExtra || '';
+        markers[id].setPopupContent(buildPopup(g, cached));
+      }
     } else {
-      const m = L.marker([g.lat, g.lng], { icon: gliderIcon(g.heading, g.climbRate) })
-        .bindPopup(popupHtml(g), { maxWidth: 260 })
+      const m = L.marker([g.lat, g.lng], { icon: gliderIcon(g.heading, g.climbRate, g.registration) })
+        .bindPopup(buildPopup(g, ''), { maxWidth: 280 })
         .addTo(map);
-      m.on('click', () => selectGlider(id));
+      m.on('click', async () => {
+        selectGlider(id);
+        // Fetch extra data once and cache on the marker
+        if (!m._ognExtra) {
+          try {
+            const res  = await fetch(`https://ddb.glidernet.org/download/?t=1&j=1&k=${(g.deviceId || '').toUpperCase()}`);
+            const data = await res.json();
+            const devId = (g.deviceId || '').toUpperCase();
+            const match = data.devices && data.devices.find(d =>
+              d.device_id && d.device_id.toUpperCase() === devId
+            );
+            if (match) {
+              m._ognExtra = `
+                <span class="popup-label">Registration</span>
+                <span class="popup-value">${match.registration || '—'}</span>
+                <span class="popup-label">Model</span>
+                <span class="popup-value">${match.aircraft_model || '—'}</span>
+                <span class="popup-label">Type</span>
+                <span class="popup-value">${match.aircraft_type || '—'}</span>
+                <span class="popup-label">CN</span>
+                <span class="popup-value">${match.cn || '—'}</span>`;
+            } else {
+              m._ognExtra = '';
+            }
+          } catch(e) { m._ognExtra = ''; }
+        }
+        m.setPopupContent(buildPopup(gliderData[id] || g, m._ognExtra));
+      });
       markers[id] = m;
     }
   });
   Object.keys(markers).forEach(id => {
-    if (!seen.has(id)) { markers[id].remove(); delete markers[id]; delete gliderData[id]; }
+    if (!seen.has(id)) {
+      markers[id].remove(); delete markers[id]; delete gliderData[id];
+      if (trails[id])      { trails[id].remove();  delete trails[id];   delete trailData[id]; }
+      if (posHistory[id])  { delete posHistory[id]; }
+      if (altHistory[id])  { delete altHistory[id]; }
+    }
   });
   updatePanel(gliders);
 }
@@ -408,10 +748,10 @@ window.selectGlider = selectGlider;
 async function fetchGliders() {
   const bounds = map.getBounds();
   const params = new URLSearchParams({
-    latMin: bounds.getSouth().toFixed(4),
-    latMax: bounds.getNorth().toFixed(4),
-    lngMin: bounds.getWest().toFixed(4),
-    lngMax: bounds.getEast().toFixed(4),
+    latMin: Math.max(bounds.getSouth(), BOUNDS_LIMIT.latMin).toFixed(4),
+    latMax: Math.min(bounds.getNorth(), BOUNDS_LIMIT.latMax).toFixed(4),
+    lngMin: Math.max(bounds.getWest(),  BOUNDS_LIMIT.lngMin).toFixed(4),
+    lngMax: Math.min(bounds.getEast(),  BOUNDS_LIMIT.lngMax).toFixed(4),
   });
   try {
     const res  = await fetch(`${OGN_PROXY_URL}?${params}`);
@@ -431,9 +771,136 @@ fetchGliders();
 setInterval(fetchGliders, POLL_INTERVAL_MS);
 map.on('moveend', () => { clearTimeout(map._ognFetchTimer); map._ognFetchTimer = setTimeout(fetchGliders, 600); });
 
-document.getElementById('toggle-panel').addEventListener('click', () => {
-  document.getElementById('panel').classList.toggle('hidden');
+// ─────────────────────────────────────────────
+// WIND ARROWS
+// ─────────────────────────────────────────────
+let windArrowsActive = false;
+let windArrowLayer   = null;
+let windArrowTimer   = null;
+
+document.getElementById('wind-arrows-btn').addEventListener('click', function() {
+  windArrowsActive = !windArrowsActive;
+  this.classList.toggle('active', windArrowsActive);
+  if (windArrowsActive) {
+    fetchWindArrows();
+    windArrowTimer = setInterval(fetchWindArrows, 300000); // refresh every 5 min
+    map.on('moveend', fetchWindArrows);
+  } else {
+    if (windArrowLayer) { map.removeLayer(windArrowLayer); windArrowLayer = null; }
+    clearInterval(windArrowTimer);
+    map.off('moveend', fetchWindArrows);
+  }
 });
+
+async function fetchWindArrows() {
+  if (!windArrowsActive) return;
+
+  const zoom   = map.getZoom();
+  const steps  = zoom < 5 ? 3 : zoom < 7 ? 5 : zoom < 9 ? 8 : zoom < 11 ? 12 : 16;
+  const maxPoints = zoom < 7 ? 16 : zoom < 10 ? 36 : 64;
+
+  // Sample the actual screen corners using pixel coordinates
+  const size   = map.getSize();
+  const sw     = map.containerPointToLatLng(L.point(0, size.y));
+  const ne     = map.containerPointToLatLng(L.point(size.x, 0));
+  const nw     = map.containerPointToLatLng(L.point(0, 0));
+  const se     = map.containerPointToLatLng(L.point(size.x, size.y));
+
+  const south  = Math.min(sw.lat, se.lat);
+  const north  = Math.max(nw.lat, ne.lat);
+  const west   = Math.min(nw.lng, sw.lng);
+  const east   = Math.max(ne.lng, se.lng);
+
+  const latStep = (north - south) / steps;
+  const lngStep = (east  - west)  / steps;
+
+  const points = [];
+  for (let i = 0; i <= steps; i++) {
+    for (let j = 0; j <= steps; j++) {
+      points.push({
+        lat: south + i * latStep,
+        lng: west  + j * lngStep,
+      });
+    }
+  }
+
+  const batch = points.slice(0, maxPoints);
+  const results = await Promise.all(batch.map(async p => {
+    try {
+      const url = `/wind-data?lat=${p.lat.toFixed(3)}&lon=${p.lng.toFixed(3)}`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const d = await res.json();
+      return { lat: p.lat, lng: p.lng, speed: d.speed, deg: d.deg };
+    } catch { return null; }
+  }));
+
+  // Remove old arrows
+  if (windArrowLayer) { map.removeLayer(windArrowLayer); windArrowLayer = null; }
+
+  // Draw new arrows
+  const arrowMarkers = results.filter(Boolean).map(w => {
+    const speedKmh = Math.round(w.speed * 3.6);
+    const color = w.speed < 5 ? '#00ff88' : w.speed < 10 ? '#ffd700' : w.speed < 20 ? '#ff8c00' : '#ff4d6d';
+
+    // Arrow SVG pointing in wind direction
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <g transform="rotate(${(w.deg + 180) % 360}, 16, 16)">
+    <line x1="16" y1="26" x2="16" y2="8" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+    <polygon points="16,4 11,12 21,12" fill="${color}"/>
+  </g>
+</svg>`;
+
+    return L.marker([w.lat, w.lng], {
+      icon: L.divIcon({ html: svg, className: '', iconSize: [32, 32], iconAnchor: [16, 16] }),
+      interactive: true,
+      zIndexOffset: 200,
+    }).bindTooltip(`${speedKmh} km/h · ${w.deg}°`, { permanent: false, className: 'wind-tooltip' });
+  });
+
+  windArrowLayer = L.layerGroup(arrowMarkers).addTo(map);
+}
+
+const panelEl   = document.getElementById('panel');
+const toggleBtn = document.getElementById('toggle-panel');
+const overlayEl = document.getElementById('panel-overlay');
+
+function isMobile() { return window.innerWidth <= 768; }
+
+function openPanel() {
+  panelEl.classList.remove('hidden');
+  toggleBtn.classList.add('panel-open');
+  toggleBtn.textContent = '✕';
+  if (isMobile()) overlayEl.classList.add('visible');
+}
+
+function closePanel() {
+  panelEl.classList.add('hidden');
+  toggleBtn.classList.remove('panel-open');
+  toggleBtn.textContent = '☰';
+  overlayEl.classList.remove('visible');
+}
+
+function togglePanel() {
+  panelEl.classList.contains('hidden') ? openPanel() : closePanel();
+}
+
+// On mobile start with panel hidden, desktop start open
+if (isMobile()) {
+  closePanel();
+} else {
+  openPanel();
+}
+
+toggleBtn.addEventListener('click', togglePanel);
+overlayEl.addEventListener('click', closePanel);
+
+// Close panel on mobile when a glider is selected
+const _selectGlider = selectGlider;
+window.selectGlider = function(id) {
+  _selectGlider(id);
+  if (isMobile()) closePanel();
+};
 </script>
 </body>
 </html>

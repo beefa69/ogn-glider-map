@@ -19,7 +19,7 @@ const ALLOWED_LAYERS = new Set([
 
 export async function onRequestGet(context) {
   // context.env holds Cloudflare Pages environment variables (set in dashboard)
-  const OWM_KEY = context.env.OWM_API_KEY;
+  const OWM_KEY = context.env.OWM_API_KEY || 'a2fc87a9c419ef769bb753b36a86c08f';
 
   if (!OWM_KEY) {
     return new Response('OWM_API_KEY environment variable is not configured.', { status: 500 });

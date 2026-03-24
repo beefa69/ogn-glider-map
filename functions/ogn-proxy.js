@@ -78,16 +78,18 @@ function parseOgnXml(xml) {
     if (isNaN(lat) || isNaN(lng)) continue;
 
     const registration = parts[2] || 'Unknown';
+    const rawSpeed = parseInt(parts[6], 10) || 0;
+    const altM     = parseInt(parts[4], 10) || 0;
 
     gliders.push({
       lat,
       lng,
       registration: registration.startsWith('_') ? '(anon)' : registration,
       deviceId:     parts[3]  || '',
-      altitudeM:    parseInt(parts[4], 10)  || 0,
-      altitudeFt:   Math.round((parseInt(parts[4], 10) || 0) * 3.281),
+      altitudeM:    altM,
+      altitudeFt:   Math.round(altM * 3.281),
       timeUtc:      parts[5]  || '',
-      speedKmh:     parseInt(parts[6], 10)  || 0,
+      speedKmh:     (rawSpeed > 350 && altM < 500) ? 0 : Math.min(rawSpeed, 400),
       heading:      parseInt(parts[7], 10)  || 0,
       climbRate:    parseFloat(parts[8])    || 0,
       aircraftType: parseInt(parts[10], 10) || 0,
