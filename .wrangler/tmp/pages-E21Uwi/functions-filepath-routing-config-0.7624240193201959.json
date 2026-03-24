@@ -1,0 +1,13 @@
+{
+  "routes": [
+    {
+      "routePath": "/ogn-proxy",
+      "mountPath": "/",
+      "method": "GET",
+      "module": [
+        "ogn-proxy.js:onRequestGet"
+      ]
+    }
+  ],
+  "baseURL": "/"
+}

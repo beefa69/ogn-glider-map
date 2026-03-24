@@ -1,20 +1,3 @@
-# wrangler.toml
-# Cloudflare Pages configuration
-# https://developers.cloudflare.com/pages/
-
 name = "ogn-glider-map"
-
-# Pages Functions are auto-discovered from the /functions directory.
-# No special build step needed for plain HTML + JS.
-
-[build]
-  command = ""          # no build step — static HTML
-  destination = "."     # serve from project root
-
-# Environment variables are set in the Cloudflare dashboard, NOT here,
-# so secrets never end up in your repository.
-#
-# Dashboard → Pages → your project → Settings → Environment variables → Add:
-#   OWM_API_KEY = a2fc87a9c419ef769bb753b36a86c08f
-#
-# Set it for both "Production" and "Preview" environments.
+compatibility_date = "2026-03-24"
+pages_build_output_dir = "."

@@ -83,6 +83,22 @@
     .wx-btn.active { border-color: var(--accent); background: rgba(0, 212, 255, 0.12); color: var(--accent); }
     .wx-btn .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
+    .wx-opacity-row {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 12px;
+      background: rgba(10, 22, 40, 0.88);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--text);
+      backdrop-filter: blur(6px);
+    }
+    .wx-opacity-row input[type=range] {
+      flex: 1; height: 3px; accent-color: var(--accent); cursor: pointer;
+    }
+    #wx-opacity-val { min-width: 32px; text-align: right; color: var(--accent); }
+
     /* ── Legend ── */
     #wx-legend {
       position: fixed;
@@ -173,6 +189,11 @@
   <button class="wx-btn" data-layer="pressure_new">
     <span class="dot" style="background:#b388ff"></span>Pressure
   </button>
+  <div class="wx-opacity-row">
+    <span>Opacity</span>
+    <input type="range" id="wx-opacity" min="0.1" max="1" step="0.05" value="0.55" />
+    <span id="wx-opacity-val">55%</span>
+  </div>
 </div>
 
 <!-- Legend -->
@@ -220,41 +241,55 @@ const LAYER_META = {
   pressure_new:      { label: 'Pressure',        gradient: 'linear-gradient(to right,#00008b,#0000ff,#00bfff,#7fff00,#ffff00,#ff6600,#ff0000)',               min: '950 hPa', max: '1070 hPa' },
 };
 
-let activeWeatherLayer = null;
-let activeLayerName    = null;
+// Multi-layer support — each layer has its own Leaflet tile layer instance
+const activeLayers = {}; // layerName → L.tileLayer
+let weatherOpacity = 0.55;
 
 function toggleWeather(btn) {
   const layer = btn.dataset.layer;
 
-  if (activeLayerName === layer) {
-    // Toggle off
-    if (activeWeatherLayer) { map.removeLayer(activeWeatherLayer); activeWeatherLayer = null; }
-    activeLayerName = null;
-    document.querySelectorAll('.wx-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('wx-legend').classList.remove('visible');
+  if (activeLayers[layer]) {
+    // Toggle OFF
+    map.removeLayer(activeLayers[layer]);
+    delete activeLayers[layer];
+    btn.classList.remove('active');
+    updateLegend();
     return;
   }
 
-  // Swap layer
-  if (activeWeatherLayer) map.removeLayer(activeWeatherLayer);
-  document.querySelectorAll('.wx-btn').forEach(b => b.classList.remove('active'));
-
-  // OWM tile URL format: /maps/1.0/weather/{layer}/{z}/{x}/{y}?appid=KEY
-  // We proxy this through /.netlify/functions/wx-tile/{z}/{x}/{y}?layer={layer}
-  activeWeatherLayer = L.tileLayer(
+  // Toggle ON — add this layer on top
+  const tileLayer = L.tileLayer(
     `${WX_TILE_BASE}/{z}/{x}/{y}?layer=${layer}`,
-    { opacity: 0.55, maxZoom: 18, className: 'weather-layer', zIndex: 500 }
+    { opacity: weatherOpacity, maxZoom: 18, className: 'weather-layer', zIndex: 500 }
   ).addTo(map);
 
-  activeLayerName = layer;
+  activeLayers[layer] = tileLayer;
   btn.classList.add('active');
+  updateLegend();
+}
 
-  const meta = LAYER_META[layer];
-  document.getElementById('wx-legend-title').textContent        = meta.label;
-  document.getElementById('wx-legend-bar').style.background     = meta.gradient;
-  document.getElementById('wx-legend-labels').innerHTML         = `<span>${meta.min}</span><span>${meta.max}</span>`;
+// Show legend for the most recently activated layer
+function updateLegend() {
+  const activeKeys = Object.keys(activeLayers);
+  if (activeKeys.length === 0) {
+    document.getElementById('wx-legend').classList.remove('visible');
+    return;
+  }
+  // Show legend for last active layer
+  const last = activeKeys[activeKeys.length - 1];
+  const meta = LAYER_META[last];
+  document.getElementById('wx-legend-title').textContent    = meta.label;
+  document.getElementById('wx-legend-bar').style.background = meta.gradient;
+  document.getElementById('wx-legend-labels').innerHTML     = `<span>${meta.min}</span><span>${meta.max}</span>`;
   document.getElementById('wx-legend').classList.add('visible');
 }
+
+// Opacity slider
+document.getElementById('wx-opacity').addEventListener('input', function() {
+  weatherOpacity = parseFloat(this.value);
+  document.getElementById('wx-opacity-val').textContent = Math.round(weatherOpacity * 100) + '%';
+  Object.values(activeLayers).forEach(l => l.setOpacity(weatherOpacity));
+});
 
 // Wire up weather buttons
 document.querySelectorAll('.wx-btn').forEach(btn => {
